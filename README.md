@@ -4,7 +4,7 @@ A tiny, mobile-first browser game that turns African food knowledge into a cogni
 
 You see a recipe sequence briefly — then it disappears. Ingredients float around the screen like bubbles. Tap them in the correct order before the timer runs out.
 
-This project is part of an experiment: using **cognitive load** (attention + timing + interference) as the “action,” with African food as the cultural layer.
+This project is part of an unique African Gaming System: using **cognitive load** (attention + timing + interference) as the “action,” with African food as the cultural layer.
 
 ## Play
 
