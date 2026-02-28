@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Recipe Rhythm — Prototype</title>
+  <title>Recipe Rhythm</title>
   <style>
     * { box-sizing: border-box; }
     html, body {
@@ -45,6 +45,7 @@
       opacity: 0.78;
       line-height: 1.2;
     }
+
     .hud-right {
       display: flex;
       gap: 8px;
@@ -54,6 +55,7 @@
       font-variant-numeric: tabular-nums;
       flex-wrap: wrap;
     }
+
     .pill {
       background: rgba(15, 23, 32, 0.06);
       border: 1px solid rgba(15, 23, 32, 0.10);
@@ -62,8 +64,23 @@
       font-weight: 900;
       font-size: 12px;
       white-space: nowrap;
+      user-select: none;
     }
     .pill strong { font-weight: 1000; }
+
+    .pill-btn {
+      border: 1px solid rgba(15, 23, 32, 0.10);
+      background: rgba(15, 23, 32, 0.06);
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-weight: 1000;
+      font-size: 12px;
+      cursor: pointer;
+      color: #0f1720;
+      user-select: none;
+    }
+    .pill-btn:active { transform: translateY(1px); }
+    .pill-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
     .stage {
       flex: 1 1 auto;
@@ -77,7 +94,7 @@
       touch-action: manipulation;
     }
 
-    /* Overlays: do NOT block clicks when hidden */
+    /* Overlays never block clicks when hidden */
     .overlay {
       position: absolute;
       inset: 0;
@@ -87,12 +104,9 @@
       padding: 12px;
       background: rgba(255,255,255,0.72);
       z-index: 30;
-      pointer-events: none; /* key fix */
+      pointer-events: none;
     }
-    .overlay.show {
-      display: flex;
-      pointer-events: auto; /* only clickable when visible */
-    }
+    .overlay.show { display: flex; pointer-events: auto; }
 
     .card {
       width: min(520px, 100%);
@@ -104,10 +118,8 @@
     }
     .card h1 { margin: 0 0 8px; font-size: 18px; font-weight: 1000; }
     .card p { margin: 0 0 12px; font-size: 13px; line-height: 1.45; opacity: 0.9; }
-
     .btnRow { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 
-    /* Smaller buttons (mobile-friendly) */
     button {
       border: none;
       border-radius: 10px;
@@ -138,7 +150,6 @@
     }
     .flash.show { opacity: 1; }
 
-    /* Sequence banner (no pause; overlays while things move) */
     .sequence {
       position: absolute;
       top: 10px;
@@ -173,19 +184,50 @@
       pointer-events: none;
       z-index: 2;
     }
+
+    /* Rooster distraction */
+    .rooster {
+      position: absolute;
+      left: 10px;
+      bottom: 44px;
+      z-index: 3;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      user-select: none;
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(15,23,32,0.06);
+      border: 1px solid rgba(15,23,32,0.10);
+      backdrop-filter: blur(6px);
+    }
+    .rooster .emoji {
+      font-size: 18px;
+      transform-origin: 50% 100%;
+      animation: bob 1.6s ease-in-out infinite;
+    }
+    .rooster .txt { font-size: 12px; font-weight: 900; opacity: 0.85; }
+    @keyframes bob {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-2px); }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="hud">
       <div class="hud-left">
-        <div class="title">Recipe Rhythm — Prototype</div>
-        <div class="subtitle" id="hudSubtitle">Warm-up</div>
+        <div class="title">Recipe Rhythm</div>
+        <div class="subtitle" id="hudSubtitle">Level 1</div>
       </div>
       <div class="hud-right">
         <div class="pill">⏳ <strong id="timeVal">—</strong></div>
         <div class="pill">🎯 Next: <strong id="nextVal">—</strong></div>
         <div class="pill">✅ <strong id="stepVal">—</strong></div>
+        <button class="pill-btn" id="hintBtn" type="button" disabled>
+          Hint (<span id="hintCount">0</span>)
+        </button>
       </div>
     </div>
 
@@ -194,15 +236,22 @@
       <div class="flash" id="flash"></div>
       <div class="sequence" id="sequenceBanner"></div>
 
+      <div class="rooster" id="rooster" aria-label="Rooster distraction">
+        <div class="emoji">🐓</div>
+        <div class="txt">crow?</div>
+      </div>
+
       <div class="overlay show" id="startOverlay">
         <div class="card">
           <h1>Tap the recipe in order.</h1>
-          <p>
-            You’ll see a sequence briefly, then it disappears.
+          <p id="startText">
+            You’ll see the sequence briefly, then it disappears.
             Tap the floating ingredients in the correct order before time runs out.
+            <br><br>
+            You get <strong>2 hints</strong> per level. Each hint costs <strong>10 seconds</strong>.
           </p>
           <div class="btnRow">
-            <button id="startBtn" type="button">Start</button>
+            <button id="startBtn" type="button">Start Level 1</button>
           </div>
         </div>
       </div>
@@ -244,6 +293,11 @@
   const replayBtn = document.getElementById("replayBtn");
   const nextBtn = document.getElementById("nextBtn");
 
+  const hintBtn = document.getElementById("hintBtn");
+  const hintCountEl = document.getElementById("hintCount");
+
+  const rooster = document.getElementById("rooster");
+
   function rand(a,b){ return Math.random()*(b-a)+a; }
   function randi(a,b){ return Math.floor(rand(a,b+1)); }
   function pick(arr){ return arr[randi(0, arr.length-1)]; }
@@ -268,38 +322,51 @@
     setTimeout(() => sequenceBanner.classList.remove("show"), ms);
   }
 
-  // Color palette for Level 3 "color noise"
-  const NOISE_COLORS = ["#B31217","#D35400","#1F618D","#117A65","#7D3C98","#2C3E50","#111111","#B7950B","#7F8C8D"];
+  // No flicker: each token gets a fixed text color at spawn (Level 3+)
+  const NOISE_TEXT_COLORS = [
+    "#FF2D55", "#FF3B30", "#FF6A00", "#FFCC00",
+    "#34C759", "#00C7BE", "#0A84FF", "#5E5CE6",
+    "#BF5AF2"
+  ];
 
-  // Sample recipes (simple cores)
+  // Recipes (simple cores, editable)
   const RECIPES = [
     { name: "Jollof (core)", steps: ["TOMATO","ONION","PEPPER","RICE"] },
     { name: "Egusi (core)",  steps: ["EGUSI","PALM OIL","SPINACH","STOCK"] },
     { name: "Suya (core)",   steps: ["PEANUT","CHILI","GINGER","ONION"] },
     { name: "Berbere Blend", steps: ["PAPRIKA","CUMIN","CLOVE","CHILI"] },
+    { name: "Injera (core)", steps: ["TEFF","WATER","STARTER","TIME"] },
   ];
 
-  // Token pool (includes distractors)
+  // Token pool
   const TOKEN_POOL = [
     "TOMATO","ONION","PEPPER","RICE","EGUSI","PALM OIL","SPINACH","STOCK",
     "PEANUT","CHILI","GINGER","GARLIC","CUMIN","CLOVE","PAPRIKA","SALT",
-    "OKRA","MILLET","TEFF","YAM"
+    "OKRA","MILLET","TEFF","YAM","STARTER","TIME"
   ];
 
-  // Level config (first 3 levels; expandable to 6)
+  // Near-match distractors appear in later levels (extra cognitive load)
+  // (Examples: PEPPER vs PAPRIKA vs PIRI PIRI; TEFF vs MILLET; YAM vs OKRA (shape not shown, but word similarity still competes))
+  const NEAR_MATCH_PACK = ["PIRI PIRI","PAPRIKA","PEPPER","CUBEB","CUMIN","CLOVE","TEFF","MILLET"];
+
+  // Full 6-level progression (constant rules, increasing interference)
   const LEVELS = [
-    { level: 1, seconds: 35, speed: 1.0,  bw: true,  colorNoise: false, steps: 3, tokens: 12, recipe: 0 },
-    { level: 2, seconds: 35, speed: 1.1,  bw: true,  colorNoise: false, steps: 4, tokens: 14, recipe: 0 },
-    { level: 3, seconds: 32, speed: 1.2,  bw: false, colorNoise: true,  steps: 4, tokens: 16, recipe: 1 },
+    { level: 1, seconds: 35, speed: 1.00, bw: true,  colorNoise: false, steps: 3, tokens: 12, recipe: 0, hints: 2 },
+    { level: 2, seconds: 35, speed: 1.10, bw: true,  colorNoise: false, steps: 4, tokens: 14, recipe: 0, hints: 2 },
+    { level: 3, seconds: 32, speed: 1.20, bw: false, colorNoise: true,  steps: 4, tokens: 16, recipe: 1, hints: 2 }, // color noise arrives
+    { level: 4, seconds: 30, speed: 1.30, bw: false, colorNoise: true,  steps: 4, tokens: 18, recipe: 2, hints: 2 }, // faster + denser
+    { level: 5, seconds: 28, speed: 1.40, bw: false, colorNoise: true,  steps: 5, tokens: 20, recipe: 3, hints: 2, nearMatches: true }, // longer + confusing word family
+    { level: 6, seconds: 26, speed: 1.55, bw: false, colorNoise: true,  steps: 5, tokens: 22, recipe: 4, hints: 2, nearMatches: true }, // max density/speed, still constant rule
   ];
 
   let levelIndex = 0;
 
   class Token {
-    constructor(x,y,r,vx,vy,text,color){
+    constructor(x,y,r,vx,vy,text,bubbleColor,textColor){
       this.x=x; this.y=y; this.r=r; this.vx=vx; this.vy=vy;
       this.text=text;
-      this.color=color;
+      this.bubbleColor=bubbleColor;
+      this.textColor=textColor;
       this.alive=true;
       this.popping=false;
       this.popT=0;
@@ -328,7 +395,7 @@
       if(this.y-this.r<pad){ this.y=this.r+pad; this.vy*=-1; }
       if(this.y+this.r>h-pad){ this.y=h-this.r-pad; this.vy*=-1; }
     }
-    draw(ctx, cfg){
+    draw(ctx){
       if(!this.alive) return;
 
       let scale=1, alpha=1;
@@ -346,22 +413,17 @@
       // bubble
       ctx.beginPath();
       ctx.arc(0,0,this.r,0,Math.PI*2);
-      ctx.fillStyle = this.color;
+      ctx.fillStyle = this.bubbleColor;
       ctx.fill();
       ctx.lineWidth=2;
-      ctx.strokeStyle="rgba(255,255,255,0.18)";
+      ctx.strokeStyle="rgba(255,255,255,0.20)";
       ctx.stroke();
 
-      // text
+      // text (same font + same sizing logic always)
       const size = Math.max(12, Math.min(16, this.r*0.32));
       ctx.textAlign="center";
       ctx.textBaseline="middle";
-
-      // Level 3: words colored as noise (text color changes, not meaning)
-      let txtCol = "rgba(255,255,255,0.96)";
-      if(cfg.colorNoise) txtCol = pick(NOISE_COLORS);
-
-      ctx.fillStyle = txtCol;
+      ctx.fillStyle = this.textColor;
       ctx.font = `1000 ${size}px system-ui, -apple-system, Segoe UI, Roboto, Arial`;
       ctx.fillText(this.text, 0, 0);
 
@@ -379,30 +441,40 @@
   let seq = [];
   let seqIndex = 0;
 
+  let hintsLeft = 0;
+
   function setHUD(cfg){
     hudSubtitle.textContent = `Level ${cfg.level}: ${recipe.name}`;
     timeVal.textContent = `${Math.ceil(timeLeft)}s`;
     nextVal.textContent = seq[seqIndex] ?? "—";
     stepVal.textContent = `${seqIndex}/${seq.length}`;
+
+    hintCountEl.textContent = String(hintsLeft);
+    hintBtn.disabled = !(mode === "play" && hintsLeft > 0);
   }
 
   function buildSequence(cfg){
     recipe = RECIPES[cfg.recipe];
     seq = recipe.steps.slice(0, cfg.steps);
     seqIndex = 0;
+    hintsLeft = cfg.hints ?? 2;
   }
 
   function spawnTokens(cfg){
     const rect = canvas.getBoundingClientRect();
     const w = rect.width, h = rect.height;
 
+    // Build distractor pool; add near-match pack on later levels
+    const pool = cfg.nearMatches ? [...TOKEN_POOL, ...NEAR_MATCH_PACK] : [...TOKEN_POOL];
+
+    // Ensure all sequence items appear
     const set = new Set(seq);
     while(set.size < cfg.tokens){
-      set.add(pick(TOKEN_POOL));
+      set.add(pick(pool));
     }
     const list = Array.from(set);
 
-    // More copies of targets makes it feel like rhythm instead of hunting a needle
+    // Expand: add extra copies of sequence tokens (keeps rhythm feel)
     const expanded = [];
     for(const s of seq){ expanded.push(s, s); }
     while(expanded.length < cfg.tokens){
@@ -418,8 +490,13 @@
     const minR = Math.max(44, Math.min(58, w*0.12));
     const maxR = Math.max(56, Math.min(74, w*0.16));
 
-    const bubbleColorsBW = ["#0f1720", "#1f2937", "#111827"];
-    const bubbleColorsColor = ["#1B4F72","#2C3E50","#4E342E","#6A1B1A","#2E5E4E","#3B2A6F","#2D3436"];
+    const bubbleColorsBW = ["#0f1720", "#111827", "#1f2937"];
+    // Vibrant but not flashing
+    const bubbleColorsVibrant = [
+      "#FF2D55", "#FF3B30", "#FF6A00", "#FFCC00",
+      "#34C759", "#00C7BE", "#0A84FF", "#5E5CE6",
+      "#BF5AF2"
+    ];
 
     tokens = expanded.map(text=>{
       const r = rand(minR,maxR);
@@ -431,47 +508,62 @@
       const vx = Math.cos(angle)*speed;
       const vy = Math.sin(angle)*speed;
 
-      const color = cfg.bw ? pick(bubbleColorsBW) : pick(bubbleColorsColor);
-      return new Token(x,y,r,vx,vy,text,color);
+      const bubbleColor = cfg.bw ? pick(bubbleColorsBW) : pick(bubbleColorsVibrant);
+
+      // BW levels: white text. Color-noise levels: fixed colorful text per token (stable, no flicker).
+      const textColor = cfg.bw
+        ? "rgba(255,255,255,0.96)"
+        : (cfg.colorNoise ? pick(NOISE_TEXT_COLORS) : "rgba(255,255,255,0.96)");
+
+      return new Token(x,y,r,vx,vy,text,bubbleColor,textColor);
     });
   }
 
   function bringExpectedToFront() {
     const expected = seq[seqIndex] ?? "";
-    // draw/hit-test topmost: move expected tokens to end
     tokens = [...tokens.filter(t => t.text !== expected), ...tokens.filter(t => t.text === expected)];
   }
 
   function beginLevel(){
     resizeCanvas();
     const cfg = LEVELS[levelIndex];
-    buildSequence(cfg);
 
+    buildSequence(cfg);
     timeLeft = cfg.seconds;
-    setHUD(cfg);
 
     spawnTokens(cfg);
     bringExpectedToFront();
 
-    // show sequence briefly while tokens already move
+    endOverlay.classList.remove("show");
+
     mode = "showSeq";
     showSequence(`RECIPE: ${seq.join(" → ")}`, 1400);
+    setTimeout(()=>{ mode = "play"; setHUD(cfg); }, 1400);
 
-    setTimeout(()=>{ mode = "play"; }, 1400);
-
-    endOverlay.classList.remove("show");
+    setHUD(cfg);
     lastTs = performance.now();
     requestAnimationFrame(loop);
+
+    startBtn.textContent = `Start Level ${cfg.level}`;
   }
 
   function endLevel(win){
     mode = "end";
     endOverlay.classList.add("show");
-    endTitle.textContent = win ? "✅ Completed" : "⏳ Time";
-    endText.textContent = win
-      ? `You finished ${recipe.name}.`
-      : `You missed the rhythm. Try again.`;
-    nextBtn.style.display = (win && levelIndex < LEVELS.length-1) ? "inline-block" : "none";
+
+    if (win) {
+      endTitle.textContent = "✅ Completed";
+      endText.textContent = `You finished Level ${LEVELS[levelIndex].level}: ${recipe.name}.`;
+    } else {
+      endTitle.textContent = "⏳ Time";
+      endText.textContent = `Try again. (Hints cost 10 seconds.)`;
+    }
+
+    // show Next Level only if win and there is a next level
+    const hasNext = levelIndex < LEVELS.length - 1;
+    nextBtn.style.display = (win && hasNext) ? "inline-block" : "none";
+
+    hintBtn.disabled = true;
   }
 
   function getPointerPos(ev){
@@ -512,6 +604,25 @@
   }
   canvas.addEventListener("pointerdown", onPointerDown);
 
+  // Hint: show sequence again + 10s penalty, up to 2 times per level
+  hintBtn.addEventListener("click", () => {
+    if(mode !== "play" || hintsLeft <= 0) return;
+    const cfg = LEVELS[levelIndex];
+
+    hintsLeft--;
+    timeLeft = Math.max(0, timeLeft - 10);
+    showSequence(`HINT: ${seq.join(" → ")}`, 1400);
+    setHUD(cfg);
+
+    if(timeLeft <= 0) endLevel(false);
+  });
+
+  // Rooster distraction: harmless
+  rooster.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (mode === "play") showSequence("🐓 COCK-A-DOODLE-DOO!", 700);
+  });
+
   function loop(ts){
     const rect = canvas.getBoundingClientRect();
     const w = rect.width, h = rect.height;
@@ -536,7 +647,7 @@
       ctx.fillStyle="#ffffff";
       ctx.fillRect(0,0,w,h);
 
-      for(const t of tokens) t.draw(ctx, cfg);
+      for(const t of tokens) t.draw(ctx);
 
       requestAnimationFrame(loop);
     }
@@ -554,8 +665,10 @@
   });
 
   nextBtn.addEventListener("click", ()=>{
-    if(levelIndex < LEVELS.length-1) levelIndex++;
-    beginLevel();
+    if(levelIndex < LEVELS.length - 1) {
+      levelIndex++;
+      beginLevel();
+    }
   });
 
   // Boot
