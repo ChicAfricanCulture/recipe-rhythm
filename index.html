@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Recipe Rhythm — Prototype</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: #ffffff;
+      color: #0f1720;
+    }
+
+    .wrap {
+      height: 100%;
+      width: min(520px, 100%);
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .hud {
+      padding: 10px 12px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(15, 23, 32, 0.08);
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(6px);
+    }
+    .hud-left { display: grid; gap: 2px; }
+    .title {
+      font-weight: 1000;
+      letter-spacing: 0.2px;
+      font-size: 14px;
+      line-height: 1.1;
+    }
+    .subtitle {
+      font-size: 12px;
+      opacity: 0.78;
+      line-height: 1.2;
+    }
+    .hud-right {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      flex-wrap: wrap;
+    }
+    .pill {
+      background: rgba(15, 23, 32, 0.06);
+      border: 1px solid rgba(15, 23, 32, 0.10);
+      padding: 7px 9px;
+      border-radius: 999px;
+      font-weight: 900;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .pill strong { font-weight: 1000; }
+
+    .stage {
+      flex: 1 1 auto;
+      min-height: 0;
+      position: relative;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: manipulation;
+    }
+
+    /* Overlays: do NOT block clicks when hidden */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      background: rgba(255,255,255,0.72);
+      z-index: 30;
+      pointer-events: none; /* key fix */
+    }
+    .overlay.show {
+      display: flex;
+      pointer-events: auto; /* only clickable when visible */
+    }
+
+    .card {
+      width: min(520px, 100%);
+      background: #ffffff;
+      border: 1px solid rgba(15, 23, 32, 0.10);
+      border-radius: 18px;
+      padding: 12px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.12);
+    }
+    .card h1 { margin: 0 0 8px; font-size: 18px; font-weight: 1000; }
+    .card p { margin: 0 0 12px; font-size: 13px; line-height: 1.45; opacity: 0.9; }
+
+    .btnRow { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+    /* Smaller buttons (mobile-friendly) */
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-weight: 900;
+      font-size: 13px;
+      cursor: pointer;
+      background: #0f1720;
+      color: #fff;
+    }
+    button:active { transform: translateY(1px); }
+
+    @media (max-height: 650px) {
+      .card { padding: 10px; }
+      button { padding: 6px 8px; font-size: 12px; }
+      .card h1 { font-size: 16px; }
+      .card p { font-size: 12px; }
+    }
+
+    .flash {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: rgba(231, 76, 60, 0.12);
+      opacity: 0;
+      transition: opacity 120ms ease;
+      z-index: 5;
+    }
+    .flash.show { opacity: 1; }
+
+    /* Sequence banner (no pause; overlays while things move) */
+    .sequence {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0f1720;
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-weight: 1000;
+      font-size: 13px;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.15);
+      opacity: 0;
+      transition: opacity 160ms ease;
+      z-index: 10;
+      max-width: calc(100% - 24px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      pointer-events: none;
+    }
+    .sequence.show { opacity: 1; }
+
+    .hint {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 10px;
+      font-size: 12px;
+      opacity: 0.78;
+      text-align: center;
+      pointer-events: none;
+      z-index: 2;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hud">
+      <div class="hud-left">
+        <div class="title">Recipe Rhythm — Prototype</div>
+        <div class="subtitle" id="hudSubtitle">Warm-up</div>
+      </div>
+      <div class="hud-right">
+        <div class="pill">⏳ <strong id="timeVal">—</strong></div>
+        <div class="pill">🎯 Next: <strong id="nextVal">—</strong></div>
+        <div class="pill">✅ <strong id="stepVal">—</strong></div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <canvas id="c"></canvas>
+      <div class="flash" id="flash"></div>
+      <div class="sequence" id="sequenceBanner"></div>
+
+      <div class="overlay show" id="startOverlay">
+        <div class="card">
+          <h1>Tap the recipe in order.</h1>
+          <p>
+            You’ll see a sequence briefly, then it disappears.
+            Tap the floating ingredients in the correct order before time runs out.
+          </p>
+          <div class="btnRow">
+            <button id="startBtn" type="button">Start</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="overlay" id="endOverlay">
+        <div class="card">
+          <h1 id="endTitle">Done</h1>
+          <p id="endText"></p>
+          <div class="btnRow">
+            <button id="replayBtn" type="button">Replay Level</button>
+            <button id="nextBtn" type="button">Next Level</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="hint" id="hint">You’ll see the recipe once. Then it’s rhythm.</div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+
+  const hudSubtitle = document.getElementById("hudSubtitle");
+  const timeVal = document.getElementById("timeVal");
+  const nextVal = document.getElementById("nextVal");
+  const stepVal = document.getElementById("stepVal");
+
+  const startOverlay = document.getElementById("startOverlay");
+  const endOverlay = document.getElementById("endOverlay");
+  const endTitle = document.getElementById("endTitle");
+  const endText = document.getElementById("endText");
+
+  const sequenceBanner = document.getElementById("sequenceBanner");
+  const flash = document.getElementById("flash");
+
+  const startBtn = document.getElementById("startBtn");
+  const replayBtn = document.getElementById("replayBtn");
+  const nextBtn = document.getElementById("nextBtn");
+
+  function rand(a,b){ return Math.random()*(b-a)+a; }
+  function randi(a,b){ return Math.floor(rand(a,b+1)); }
+  function pick(arr){ return arr[randi(0, arr.length-1)]; }
+
+  function resizeCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    canvas.width = Math.floor(rect.width * dpr);
+    canvas.height = Math.floor(rect.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener("resize", resizeCanvas);
+
+  function flashWrong() {
+    flash.classList.add("show");
+    setTimeout(() => flash.classList.remove("show"), 120);
+  }
+
+  function showSequence(text, ms=1300) {
+    sequenceBanner.textContent = text;
+    sequenceBanner.classList.add("show");
+    setTimeout(() => sequenceBanner.classList.remove("show"), ms);
+  }
+
+  // Color palette for Level 3 "color noise"
+  const NOISE_COLORS = ["#B31217","#D35400","#1F618D","#117A65","#7D3C98","#2C3E50","#111111","#B7950B","#7F8C8D"];
+
+  // Sample recipes (simple cores)
+  const RECIPES = [
+    { name: "Jollof (core)", steps: ["TOMATO","ONION","PEPPER","RICE"] },
+    { name: "Egusi (core)",  steps: ["EGUSI","PALM OIL","SPINACH","STOCK"] },
+    { name: "Suya (core)",   steps: ["PEANUT","CHILI","GINGER","ONION"] },
+    { name: "Berbere Blend", steps: ["PAPRIKA","CUMIN","CLOVE","CHILI"] },
+  ];
+
+  // Token pool (includes distractors)
+  const TOKEN_POOL = [
+    "TOMATO","ONION","PEPPER","RICE","EGUSI","PALM OIL","SPINACH","STOCK",
+    "PEANUT","CHILI","GINGER","GARLIC","CUMIN","CLOVE","PAPRIKA","SALT",
+    "OKRA","MILLET","TEFF","YAM"
+  ];
+
+  // Level config (first 3 levels; expandable to 6)
+  const LEVELS = [
+    { level: 1, seconds: 35, speed: 1.0,  bw: true,  colorNoise: false, steps: 3, tokens: 12, recipe: 0 },
+    { level: 2, seconds: 35, speed: 1.1,  bw: true,  colorNoise: false, steps: 4, tokens: 14, recipe: 0 },
+    { level: 3, seconds: 32, speed: 1.2,  bw: false, colorNoise: true,  steps: 4, tokens: 16, recipe: 1 },
+  ];
+
+  let levelIndex = 0;
+
+  class Token {
+    constructor(x,y,r,vx,vy,text,color){
+      this.x=x; this.y=y; this.r=r; this.vx=vx; this.vy=vy;
+      this.text=text;
+      this.color=color;
+      this.alive=true;
+      this.popping=false;
+      this.popT=0;
+    }
+    hit(px,py){
+      const dx=px-this.x, dy=py-this.y;
+      return (dx*dx+dy*dy) <= this.r*this.r;
+    }
+    pop(){
+      if(!this.alive||this.popping) return;
+      this.popping=true; this.popT=0;
+    }
+    update(dt,w,h,speedMul){
+      if(!this.alive) return;
+      if(this.popping){
+        this.popT += dt*3.2;
+        if(this.popT>=1) this.alive=false;
+        return;
+      }
+      this.x += this.vx*dt*speedMul;
+      this.y += this.vy*dt*speedMul;
+
+      const pad=2;
+      if(this.x-this.r<pad){ this.x=this.r+pad; this.vx*=-1; }
+      if(this.x+this.r>w-pad){ this.x=w-this.r-pad; this.vx*=-1; }
+      if(this.y-this.r<pad){ this.y=this.r+pad; this.vy*=-1; }
+      if(this.y+this.r>h-pad){ this.y=h-this.r-pad; this.vy*=-1; }
+    }
+    draw(ctx, cfg){
+      if(!this.alive) return;
+
+      let scale=1, alpha=1;
+      if(this.popping){
+        const t=Math.min(1,this.popT);
+        scale=1-t*0.9;
+        alpha=1-t;
+      }
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(this.x,this.y);
+      ctx.scale(scale,scale);
+
+      // bubble
+      ctx.beginPath();
+      ctx.arc(0,0,this.r,0,Math.PI*2);
+      ctx.fillStyle = this.color;
+      ctx.fill();
+      ctx.lineWidth=2;
+      ctx.strokeStyle="rgba(255,255,255,0.18)";
+      ctx.stroke();
+
+      // text
+      const size = Math.max(12, Math.min(16, this.r*0.32));
+      ctx.textAlign="center";
+      ctx.textBaseline="middle";
+
+      // Level 3: words colored as noise (text color changes, not meaning)
+      let txtCol = "rgba(255,255,255,0.96)";
+      if(cfg.colorNoise) txtCol = pick(NOISE_COLORS);
+
+      ctx.fillStyle = txtCol;
+      ctx.font = `1000 ${size}px system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+      ctx.fillText(this.text, 0, 0);
+
+      ctx.restore();
+    }
+  }
+
+  // State
+  let mode = "idle"; // showSeq|play|end
+  let tokens = [];
+  let lastTs = 0;
+
+  let timeLeft = 0;
+  let recipe = null;
+  let seq = [];
+  let seqIndex = 0;
+
+  function setHUD(cfg){
+    hudSubtitle.textContent = `Level ${cfg.level}: ${recipe.name}`;
+    timeVal.textContent = `${Math.ceil(timeLeft)}s`;
+    nextVal.textContent = seq[seqIndex] ?? "—";
+    stepVal.textContent = `${seqIndex}/${seq.length}`;
+  }
+
+  function buildSequence(cfg){
+    recipe = RECIPES[cfg.recipe];
+    seq = recipe.steps.slice(0, cfg.steps);
+    seqIndex = 0;
+  }
+
+  function spawnTokens(cfg){
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width, h = rect.height;
+
+    const set = new Set(seq);
+    while(set.size < cfg.tokens){
+      set.add(pick(TOKEN_POOL));
+    }
+    const list = Array.from(set);
+
+    // More copies of targets makes it feel like rhythm instead of hunting a needle
+    const expanded = [];
+    for(const s of seq){ expanded.push(s, s); }
+    while(expanded.length < cfg.tokens){
+      expanded.push(pick(list));
+    }
+
+    // shuffle
+    for(let i=expanded.length-1;i>0;i--){
+      const j=Math.floor(Math.random()*(i+1));
+      [expanded[i],expanded[j]]=[expanded[j],expanded[i]];
+    }
+
+    const minR = Math.max(44, Math.min(58, w*0.12));
+    const maxR = Math.max(56, Math.min(74, w*0.16));
+
+    const bubbleColorsBW = ["#0f1720", "#1f2937", "#111827"];
+    const bubbleColorsColor = ["#1B4F72","#2C3E50","#4E342E","#6A1B1A","#2E5E4E","#3B2A6F","#2D3436"];
+
+    tokens = expanded.map(text=>{
+      const r = rand(minR,maxR);
+      const x = rand(r+6, w-r-6);
+      const y = rand(r+6, h-r-6);
+
+      const angle = rand(0,Math.PI*2);
+      const speed = rand(28,42);
+      const vx = Math.cos(angle)*speed;
+      const vy = Math.sin(angle)*speed;
+
+      const color = cfg.bw ? pick(bubbleColorsBW) : pick(bubbleColorsColor);
+      return new Token(x,y,r,vx,vy,text,color);
+    });
+  }
+
+  function bringExpectedToFront() {
+    const expected = seq[seqIndex] ?? "";
+    // draw/hit-test topmost: move expected tokens to end
+    tokens = [...tokens.filter(t => t.text !== expected), ...tokens.filter(t => t.text === expected)];
+  }
+
+  function beginLevel(){
+    resizeCanvas();
+    const cfg = LEVELS[levelIndex];
+    buildSequence(cfg);
+
+    timeLeft = cfg.seconds;
+    setHUD(cfg);
+
+    spawnTokens(cfg);
+    bringExpectedToFront();
+
+    // show sequence briefly while tokens already move
+    mode = "showSeq";
+    showSequence(`RECIPE: ${seq.join(" → ")}`, 1400);
+
+    setTimeout(()=>{ mode = "play"; }, 1400);
+
+    endOverlay.classList.remove("show");
+    lastTs = performance.now();
+    requestAnimationFrame(loop);
+  }
+
+  function endLevel(win){
+    mode = "end";
+    endOverlay.classList.add("show");
+    endTitle.textContent = win ? "✅ Completed" : "⏳ Time";
+    endText.textContent = win
+      ? `You finished ${recipe.name}.`
+      : `You missed the rhythm. Try again.`;
+    nextBtn.style.display = (win && levelIndex < LEVELS.length-1) ? "inline-block" : "none";
+  }
+
+  function getPointerPos(ev){
+    const rect = canvas.getBoundingClientRect();
+    return { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+  }
+
+  function onPointerDown(ev){
+    if(mode !== "play") return;
+    const cfg = LEVELS[levelIndex];
+    const {x,y} = getPointerPos(ev);
+
+    let hit = null;
+    for(let i=tokens.length-1;i>=0;i--){
+      const t=tokens[i];
+      if(t.alive && !t.popping && t.hit(x,y)){ hit=t; break; }
+    }
+    if(!hit) return;
+
+    const expected = seq[seqIndex];
+
+    if(hit.text === expected){
+      hit.pop();
+      seqIndex++;
+      bringExpectedToFront();
+      setHUD(cfg);
+
+      if(seqIndex >= seq.length){
+        setTimeout(()=>endLevel(true), 520);
+      }
+    } else {
+      flashWrong();
+      timeLeft = Math.max(0, timeLeft - 2);
+      seqIndex = 0;
+      bringExpectedToFront();
+      setHUD(cfg);
+    }
+  }
+  canvas.addEventListener("pointerdown", onPointerDown);
+
+  function loop(ts){
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width, h = rect.height;
+    const dt = Math.min(0.033, (ts-lastTs)/1000);
+    lastTs = ts;
+
+    const cfg = LEVELS[levelIndex];
+
+    if(mode === "showSeq" || mode === "play"){
+      timeLeft -= dt;
+      if(timeLeft < 0) timeLeft = 0;
+      setHUD(cfg);
+
+      if(timeLeft <= 0){
+        endLevel(false);
+        return;
+      }
+
+      for(const t of tokens) t.update(dt, w, h, cfg.speed);
+
+      ctx.clearRect(0,0,w,h);
+      ctx.fillStyle="#ffffff";
+      ctx.fillRect(0,0,w,h);
+
+      for(const t of tokens) t.draw(ctx, cfg);
+
+      requestAnimationFrame(loop);
+    }
+  }
+
+  // Buttons
+  startBtn.addEventListener("click", ()=>{
+    startOverlay.classList.remove("show");
+    levelIndex = 0;
+    beginLevel();
+  });
+
+  replayBtn.addEventListener("click", ()=>{
+    beginLevel();
+  });
+
+  nextBtn.addEventListener("click", ()=>{
+    if(levelIndex < LEVELS.length-1) levelIndex++;
+    beginLevel();
+  });
+
+  // Boot
+  resizeCanvas();
+})();
+</script>
+</body>
+</html>
