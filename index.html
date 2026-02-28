@@ -117,7 +117,7 @@
       box-shadow: 0 18px 50px rgba(0,0,0,0.12);
     }
     .card h1 { margin: 0 0 8px; font-size: 18px; font-weight: 1000; }
-    .card p { margin: 0 0 12px; font-size: 13px; line-height: 1.45; opacity: 0.9; }
+    .card p  { margin: 0 0 12px; font-size: 13px; line-height: 1.45; opacity: 0.9; }
     .btnRow { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 
     button {
@@ -136,7 +136,7 @@
       .card { padding: 10px; }
       button { padding: 6px 8px; font-size: 12px; }
       .card h1 { font-size: 16px; }
-      .card p { font-size: 12px; }
+      .card p  { font-size: 12px; }
     }
 
     .flash {
@@ -150,7 +150,7 @@
     }
     .flash.show { opacity: 1; }
 
-    .sequence {
+    .banner {
       position: absolute;
       top: 10px;
       left: 50%;
@@ -171,7 +171,7 @@
       text-overflow: ellipsis;
       pointer-events: none;
     }
-    .sequence.show { opacity: 1; }
+    .banner.show { opacity: 1; }
 
     .hint {
       position: absolute;
@@ -212,8 +212,41 @@
       0%, 100% { transform: translateY(0); }
       50% { transform: translateY(-2px); }
     }
+
+    /* Unlock box styling */
+    .unlockBox {
+      display: none;
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(15,23,32,0.12);
+      background: rgba(15,23,32,0.03);
+    }
+    .unlockTitle {
+      font-weight: 1000;
+      margin-bottom: 6px;
+    }
+    .unlockMeta {
+      font-weight: 1000;
+      margin-bottom: 8px;
+      opacity: 0.92;
+    }
+    .unlockText {
+      white-space: pre-wrap;
+      font-size: 13px;
+      line-height: 1.45;
+      opacity: 0.95;
+    }
+    .unlockBtns {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
   </style>
 </head>
+
 <body>
   <div class="wrap">
     <div class="hud">
@@ -234,7 +267,7 @@
     <div class="stage">
       <canvas id="c"></canvas>
       <div class="flash" id="flash"></div>
-      <div class="sequence" id="sequenceBanner"></div>
+      <div class="banner" id="banner"></div>
 
       <div class="rooster" id="rooster" aria-label="Rooster distraction">
         <div class="emoji">🐓</div>
@@ -244,10 +277,9 @@
       <div class="overlay show" id="startOverlay">
         <div class="card">
           <h1>Tap the recipe in order.</h1>
-          <p id="startText">
-            You’ll see the sequence briefly, then it disappears.
-            Tap the floating ingredients in the correct order before time runs out.
-            <br><br>
+          <p>
+            You’ll see the sequence briefly, then it disappears.<br/>
+            Tap the floating ingredients in the correct order before time runs out.<br/><br/>
             You get <strong>2 hints</strong> per level. Each hint costs <strong>10 seconds</strong>.
           </p>
           <div class="btnRow">
@@ -260,7 +292,17 @@
         <div class="card">
           <h1 id="endTitle">Done</h1>
           <p id="endText"></p>
-          <div class="btnRow">
+
+          <div class="unlockBox" id="unlockBox">
+            <div class="unlockTitle" id="unlockTitle">🎉 You unlocked a secret</div>
+            <div class="unlockMeta" id="unlockMeta"></div>
+            <div class="unlockText" id="unlockText"></div>
+            <div class="unlockBtns">
+              <button id="copyUnlockBtn" type="button">Copy Note</button>
+            </div>
+          </div>
+
+          <div class="btnRow" style="margin-top: 12px;">
             <button id="replayBtn" type="button">Replay Level</button>
             <button id="nextBtn" type="button">Next Level</button>
           </div>
@@ -273,6 +315,9 @@
 
 <script>
 (() => {
+  /**********************
+   * DOM
+   **********************/
   const canvas = document.getElementById("c");
   const ctx = canvas.getContext("2d");
 
@@ -286,8 +331,8 @@
   const endTitle = document.getElementById("endTitle");
   const endText = document.getElementById("endText");
 
-  const sequenceBanner = document.getElementById("sequenceBanner");
   const flash = document.getElementById("flash");
+  const banner = document.getElementById("banner");
 
   const startBtn = document.getElementById("startBtn");
   const replayBtn = document.getElementById("replayBtn");
@@ -298,6 +343,14 @@
 
   const rooster = document.getElementById("rooster");
 
+  const unlockBox = document.getElementById("unlockBox");
+  const unlockMeta = document.getElementById("unlockMeta");
+  const unlockText = document.getElementById("unlockText");
+  const copyUnlockBtn = document.getElementById("copyUnlockBtn");
+
+  /**********************
+   * Utilities
+   **********************/
   function rand(a,b){ return Math.random()*(b-a)+a; }
   function randi(a,b){ return Math.floor(rand(a,b+1)); }
   function pick(arr){ return arr[randi(0, arr.length-1)]; }
@@ -316,20 +369,35 @@
     setTimeout(() => flash.classList.remove("show"), 120);
   }
 
-  function showSequence(text, ms=1300) {
-    sequenceBanner.textContent = text;
-    sequenceBanner.classList.add("show");
-    setTimeout(() => sequenceBanner.classList.remove("show"), ms);
+  // One banner function for sequence + hint + rooster
+  let bannerTimer = null;
+  function showBanner(text, ms=1300) {
+    banner.textContent = text;
+    banner.classList.add("show");
+    if (bannerTimer) clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => banner.classList.remove("show"), ms);
   }
 
-  // No flicker: each token gets a fixed text color at spawn (Level 3+)
+  /**********************
+   * Content
+   **********************/
+  // Text colors for noise (stable per token; no flicker)
   const NOISE_TEXT_COLORS = [
     "#FF2D55", "#FF3B30", "#FF6A00", "#FFCC00",
     "#34C759", "#00C7BE", "#0A84FF", "#5E5CE6",
     "#BF5AF2"
   ];
 
-  // Recipes (simple cores, editable)
+  // Vibrant bubble colors (stable; no flicker)
+  const VIBRANT_BUBBLES = [
+    "#FF2D55", "#FF3B30", "#FF6A00", "#FFCC00",
+    "#34C759", "#00C7BE", "#0A84FF", "#5E5CE6",
+    "#BF5AF2"
+  ];
+
+  const BW_BUBBLES = ["#0f1720", "#111827", "#1f2937"];
+
+  // Recipes: simple cores, editable (kept intentionally non-absolute)
   const RECIPES = [
     { name: "Jollof (core)", steps: ["TOMATO","ONION","PEPPER","RICE"] },
     { name: "Egusi (core)",  steps: ["EGUSI","PALM OIL","SPINACH","STOCK"] },
@@ -342,25 +410,86 @@
   const TOKEN_POOL = [
     "TOMATO","ONION","PEPPER","RICE","EGUSI","PALM OIL","SPINACH","STOCK",
     "PEANUT","CHILI","GINGER","GARLIC","CUMIN","CLOVE","PAPRIKA","SALT",
-    "OKRA","MILLET","TEFF","YAM","STARTER","TIME"
+    "OKRA","MILLET","TEFF","YAM","STARTER","TIME","BAY LEAF"
   ];
 
-  // Near-match distractors appear in later levels (extra cognitive load)
-  // (Examples: PEPPER vs PAPRIKA vs PIRI PIRI; TEFF vs MILLET; YAM vs OKRA (shape not shown, but word similarity still competes))
-  const NEAR_MATCH_PACK = ["PIRI PIRI","PAPRIKA","PEPPER","CUBEB","CUMIN","CLOVE","TEFF","MILLET"];
+  // Near-match distractors (late-level load)
+  const NEAR_MATCH_PACK = [
+    "PIRI PIRI","PAPRIKA","PEPPER","CUBEB","CUMIN","CLOVE","TEFF","MILLET","BAY LEAF"
+  ];
 
-  // Full 6-level progression (constant rules, increasing interference)
+  // Marginalia unlocks:
+  // - Levels 1–5: short “note” unlock
+  // - Level 6: Auntie’s full 1998 note (your text)
+  const AUNTIE_JOLLOF_NOTE =
+`Three things they don't tell you:
+
+— Tomato paste must fry until it darkens. That's the color.
+
+— Onions go in twice. Once at the start, once at the end.
+
+— The bay leaf? Take it out before serving. It's done its job.
+
+The rest is between you and the pot.
+
+— Auntie's margin, 1998`;
+
+  const UNLOCKS = [
+    { // level 1
+      meta: "Cousin’s Margin (2006)",
+      text:
+`“If it smells good, you’re already winning.
+But don’t stare at the pot.
+Stare at the ORDER.”`
+    },
+    { // level 2
+      meta: "Market Woman’s Margin (1993)",
+      text:
+`“Buy onions like you mean it.
+The sweet ones. The sharp ones.
+Both belong.”`
+    },
+    { // level 3
+      meta: "Uncle’s Margin (2001)",
+      text:
+`“Pepper has a family.
+Some bite quick.
+Some burn slow.
+Don’t confuse them.”`
+    },
+    { // level 4
+      meta: "Mom’s Margin (1999)",
+      text:
+`“Palm oil is not just color.
+It’s a signal.
+Add it when the pot is listening.”`
+    },
+    { // level 5
+      meta: "Grandma’s Margin (1982)",
+      text:
+`“Taste is timing.
+Not everything goes in at once.
+The order is the recipe.”`
+    },
+    { // level 6 (final)
+      meta: "Auntie’s Marginalia (1998)",
+      text: AUNTIE_JOLLOF_NOTE
+    },
+  ];
+
+  // Levels 1–6
   const LEVELS = [
-    { level: 1, seconds: 35, speed: 1.00, bw: true,  colorNoise: false, steps: 3, tokens: 12, recipe: 0, hints: 2 },
-    { level: 2, seconds: 35, speed: 1.10, bw: true,  colorNoise: false, steps: 4, tokens: 14, recipe: 0, hints: 2 },
-    { level: 3, seconds: 32, speed: 1.20, bw: false, colorNoise: true,  steps: 4, tokens: 16, recipe: 1, hints: 2 }, // color noise arrives
-    { level: 4, seconds: 30, speed: 1.30, bw: false, colorNoise: true,  steps: 4, tokens: 18, recipe: 2, hints: 2 }, // faster + denser
-    { level: 5, seconds: 28, speed: 1.40, bw: false, colorNoise: true,  steps: 5, tokens: 20, recipe: 3, hints: 2, nearMatches: true }, // longer + confusing word family
-    { level: 6, seconds: 26, speed: 1.55, bw: false, colorNoise: true,  steps: 5, tokens: 22, recipe: 4, hints: 2, nearMatches: true }, // max density/speed, still constant rule
+    { level: 1, seconds: 35, speed: 1.00, bw: true,  colorNoise: false, steps: 3, tokens: 12, recipe: 0, hints: 2, nearMatches: false },
+    { level: 2, seconds: 35, speed: 1.10, bw: true,  colorNoise: false, steps: 4, tokens: 14, recipe: 0, hints: 2, nearMatches: false },
+    { level: 3, seconds: 32, speed: 1.20, bw: false, colorNoise: true,  steps: 4, tokens: 16, recipe: 1, hints: 2, nearMatches: false },
+    { level: 4, seconds: 30, speed: 1.30, bw: false, colorNoise: true,  steps: 4, tokens: 18, recipe: 2, hints: 2, nearMatches: false },
+    { level: 5, seconds: 28, speed: 1.40, bw: false, colorNoise: true,  steps: 5, tokens: 20, recipe: 3, hints: 2, nearMatches: true  },
+    { level: 6, seconds: 26, speed: 1.55, bw: false, colorNoise: true,  steps: 5, tokens: 22, recipe: 4, hints: 2, nearMatches: true  },
   ];
 
-  let levelIndex = 0;
-
+  /**********************
+   * Game Objects
+   **********************/
   class Token {
     constructor(x,y,r,vx,vy,text,bubbleColor,textColor){
       this.x=x; this.y=y; this.r=r; this.vx=vx; this.vy=vy;
@@ -419,7 +548,7 @@
       ctx.strokeStyle="rgba(255,255,255,0.20)";
       ctx.stroke();
 
-      // text (same font + same sizing logic always)
+      // text (same font + sizing throughout)
       const size = Math.max(12, Math.min(16, this.r*0.32));
       ctx.textAlign="center";
       ctx.textBaseline="middle";
@@ -431,7 +560,10 @@
     }
   }
 
-  // State
+  /**********************
+   * State
+   **********************/
+  let levelIndex = 0;
   let mode = "idle"; // showSeq|play|end
   let tokens = [];
   let lastTs = 0;
@@ -440,9 +572,14 @@
   let recipe = null;
   let seq = [];
   let seqIndex = 0;
-
   let hintsLeft = 0;
 
+  // The unlock text that was just earned (for Copy Note)
+  let lastUnlockedText = "";
+
+  /**********************
+   * Game Logic
+   **********************/
   function setHUD(cfg){
     hudSubtitle.textContent = `Level ${cfg.level}: ${recipe.name}`;
     timeVal.textContent = `${Math.ceil(timeLeft)}s`;
@@ -464,17 +601,16 @@
     const rect = canvas.getBoundingClientRect();
     const w = rect.width, h = rect.height;
 
-    // Build distractor pool; add near-match pack on later levels
     const pool = cfg.nearMatches ? [...TOKEN_POOL, ...NEAR_MATCH_PACK] : [...TOKEN_POOL];
 
-    // Ensure all sequence items appear
+    // Ensure sequence items appear
     const set = new Set(seq);
     while(set.size < cfg.tokens){
       set.add(pick(pool));
     }
     const list = Array.from(set);
 
-    // Expand: add extra copies of sequence tokens (keeps rhythm feel)
+    // Expand: add extra copies of sequence tokens (feels rhythmic, not needle-hunting)
     const expanded = [];
     for(const s of seq){ expanded.push(s, s); }
     while(expanded.length < cfg.tokens){
@@ -490,27 +626,17 @@
     const minR = Math.max(44, Math.min(58, w*0.12));
     const maxR = Math.max(56, Math.min(74, w*0.16));
 
-    const bubbleColorsBW = ["#0f1720", "#111827", "#1f2937"];
-    // Vibrant but not flashing
-    const bubbleColorsVibrant = [
-      "#FF2D55", "#FF3B30", "#FF6A00", "#FFCC00",
-      "#34C759", "#00C7BE", "#0A84FF", "#5E5CE6",
-      "#BF5AF2"
-    ];
-
     tokens = expanded.map(text=>{
       const r = rand(minR,maxR);
       const x = rand(r+6, w-r-6);
       const y = rand(r+6, h-r-6);
 
       const angle = rand(0,Math.PI*2);
-      const speed = rand(28,42);
-      const vx = Math.cos(angle)*speed;
-      const vy = Math.sin(angle)*speed;
+      const baseSpeed = rand(28,42);
+      const vx = Math.cos(angle)*baseSpeed;
+      const vy = Math.sin(angle)*baseSpeed;
 
-      const bubbleColor = cfg.bw ? pick(bubbleColorsBW) : pick(bubbleColorsVibrant);
-
-      // BW levels: white text. Color-noise levels: fixed colorful text per token (stable, no flicker).
+      const bubbleColor = cfg.bw ? pick(BW_BUBBLES) : pick(VIBRANT_BUBBLES);
       const textColor = cfg.bw
         ? "rgba(255,255,255,0.96)"
         : (cfg.colorNoise ? pick(NOISE_TEXT_COLORS) : "rgba(255,255,255,0.96)");
@@ -534,10 +660,16 @@
     spawnTokens(cfg);
     bringExpectedToFront();
 
+    // clear overlays
     endOverlay.classList.remove("show");
 
+    // hide unlock section while playing
+    if (unlockBox) unlockBox.style.display = "none";
+    lastUnlockedText = "";
+
+    // show sequence briefly
     mode = "showSeq";
-    showSequence(`RECIPE: ${seq.join(" → ")}`, 1400);
+    showBanner(`RECIPE: ${seq.join(" → ")}`, 1400);
     setTimeout(()=>{ mode = "play"; setHUD(cfg); }, 1400);
 
     setHUD(cfg);
@@ -547,21 +679,56 @@
     startBtn.textContent = `Start Level ${cfg.level}`;
   }
 
+  function showUnlockForLevel(lvlIdx) {
+    const unlock = UNLOCKS[lvlIdx] || null;
+    if (!unlock) {
+      if (unlockBox) unlockBox.style.display = "none";
+      return;
+    }
+
+    lastUnlockedText = `${unlock.meta}\n\n${unlock.text}`;
+
+    unlockMeta.textContent = unlock.meta;
+    unlockText.textContent = unlock.text;
+    unlockBox.style.display = "block";
+  }
+
   function endLevel(win){
     mode = "end";
     endOverlay.classList.add("show");
 
+    // always reset unlock UI first
+    if (unlockBox) unlockBox.style.display = "none";
+    lastUnlockedText = "";
+
+    const cfg = LEVELS[levelIndex];
+    const isFinal = (levelIndex === LEVELS.length - 1);
+
     if (win) {
-      endTitle.textContent = "✅ Completed";
-      endText.textContent = `You finished Level ${LEVELS[levelIndex].level}: ${recipe.name}.`;
+      if (isFinal) {
+        endTitle.textContent = "🎉 CONGRATULATIONS!";
+        endText.textContent = "You completed all 6 levels. Rhythm mastered.";
+
+        // Big final unlock (Auntie’s full note)
+        showUnlockForLevel(levelIndex);
+
+        // no next level after final
+        nextBtn.style.display = "none";
+      } else {
+        endTitle.textContent = "✅ LEVEL CLEARED!";
+        endText.textContent = `Level ${cfg.level} complete — ${recipe.name}.`;
+
+        // Unlock note for this level
+        showUnlockForLevel(levelIndex);
+
+        // allow next
+        nextBtn.style.display = "inline-block";
+      }
     } else {
       endTitle.textContent = "⏳ Time";
-      endText.textContent = `Try again. (Hints cost 10 seconds.)`;
+      endText.textContent = "Try again. (Hints cost 10 seconds.)";
+      nextBtn.style.display = "none";
     }
-
-    // show Next Level only if win and there is a next level
-    const hasNext = levelIndex < LEVELS.length - 1;
-    nextBtn.style.display = (win && hasNext) ? "inline-block" : "none";
 
     hintBtn.disabled = true;
   }
@@ -604,23 +771,36 @@
   }
   canvas.addEventListener("pointerdown", onPointerDown);
 
-  // Hint: show sequence again + 10s penalty, up to 2 times per level
+  // Hint: show sequence again + 10s penalty, max 2 per level
   hintBtn.addEventListener("click", () => {
     if(mode !== "play" || hintsLeft <= 0) return;
     const cfg = LEVELS[levelIndex];
 
     hintsLeft--;
     timeLeft = Math.max(0, timeLeft - 10);
-    showSequence(`HINT: ${seq.join(" → ")}`, 1400);
+    showBanner(`HINT: ${seq.join(" → ")}`, 1400);
     setHUD(cfg);
 
     if(timeLeft <= 0) endLevel(false);
   });
 
-  // Rooster distraction: harmless
+  // Rooster distraction: harmless, cute
   rooster.addEventListener("pointerdown", (e) => {
     e.preventDefault();
-    if (mode === "play") showSequence("🐓 COCK-A-DOODLE-DOO!", 700);
+    if (mode === "play") showBanner("🐓 COCK-A-DOODLE-DOO!", 700);
+  });
+
+  // Copy unlock note to clipboard
+  copyUnlockBtn.addEventListener("click", async () => {
+    if (!lastUnlockedText) return;
+    try {
+      await navigator.clipboard.writeText(lastUnlockedText);
+      copyUnlockBtn.textContent = "Copied ✅";
+      setTimeout(() => (copyUnlockBtn.textContent = "Copy Note"), 1200);
+    } catch (e) {
+      copyUnlockBtn.textContent = "Copy failed";
+      setTimeout(() => (copyUnlockBtn.textContent = "Copy Note"), 1200);
+    }
   });
 
   function loop(ts){
@@ -653,7 +833,9 @@
     }
   }
 
-  // Buttons
+  /**********************
+   * Buttons
+   **********************/
   startBtn.addEventListener("click", ()=>{
     startOverlay.classList.remove("show");
     levelIndex = 0;
@@ -671,7 +853,9 @@
     }
   });
 
-  // Boot
+  /**********************
+   * Boot
+   **********************/
   resizeCanvas();
 })();
 </script>
