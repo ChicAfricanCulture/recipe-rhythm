@@ -1,49 +1,28 @@
 # Recipe Rhythm
 
-A tiny, mobile-first browser game that turns African food knowledge into a cognitive rhythm challenge.
+A quick memory game for your phone. You see a short recipe order, then it disappears and the ingredients float around the screen as bubbles. Tap them in the right order before time runs out.
 
-You see a recipe sequence briefly — then it disappears. Ingredients float around the screen like bubbles. Tap them in the correct order before the timer runs out.
+**▶ Play it here: [https://chicafricanculture.github.io/recipe-rhythm/](https://chicafricanculture.github.io/recipe-rhythm/)**
 
-This project is part of an unique African Gaming System: using **cognitive load** (attention + timing + interference) as the “action,” with African food as the cultural layer.
+A free game from [The African Gourmet](https://www.theafricangourmet.com/), made to help people learn about African food through play.
 
-## Play
+## How to play
 
-- Open the GitHub Pages link (once enabled), or run locally:
-  - Download the repo
-  - Open `index.html` in your browser
+- Watch the recipe order, for example tomato, onion, pepper, rice.
+- Tap the floating ingredients in that exact order.
+- A wrong tap costs time and sends you back to the first step.
+- You get 2 hints per level. Each hint costs 10 seconds.
+- There are six levels. Later levels add colour to distract you, and more steps.
 
-## How to Play
+## More from The African Gourmet
 
-1. A recipe sequence appears (e.g., `TOMATO → ONION → PEPPER → RICE`)
-2. The sequence disappears
-3. Tap the floating ingredient bubbles **in the exact order**
-4. Wrong tap:
-   - time penalty
-   - sequence resets to step 1
+- [More African food stories at The African Gourmet](https://www.theafricangourmet.com/)
+- [More games to play and learn](https://www.theafricangourmet.com/p/play-learn-african-food-games.html)
 
-## Levels (Current)
+## Licence
 
-- **Level 1:** Black & white bubbles, short sequence (3 steps)
-- **Level 2:** Black & white, longer sequence (4 steps)
-- **Level 3:** Color noise is introduced (text colors change), but the rule stays the same: **tap the correct WORD**
+Licensed under CC BY 4.0.
 
-Planned: expand to Level 6 using the same progression style (speed, density, similarity, interference).
+---
 
-## Why this exists
-
-African food is often boxed into “kitchen-only” contexts. This game puts it in a different space: casual play.
-
-No lectures, no heavy framing — just a game that happens to be built from African food knowledge.
-
-## Tech
-
-- Single-file HTML/CSS/JS
-- Canvas rendering
-- Mobile-first layout
-- No external libraries
-
-   <div class="footer">
-        <p>Maintained by <a href="https://www.theafricangourmet.com" style="color: #8B4513;">The African Gourmet</a> · Licensed under CC BY 4.0</p>
-        <p>Part of [SankofaKitchen](https://github.com/ChicAfricanCulture) — African foodways retrieved through play  
-[Visit my GitHub profile](https://github.com/ChicAfricanCulture) for more projects</p>
-    </div>
+Maintained by [The African Gourmet](https://www.theafricangourmet.com/).
